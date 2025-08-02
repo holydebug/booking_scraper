@@ -1,6 +1,6 @@
 # BookingCrawler
 
-**BookingCrawler** is an educational web crawler project designed to demonstrate web scraping techniques on a demo booking website. It simulates the extraction of hotel listings, prices, and availability data to help developers practice handling pagination, dynamic content, and structured data collection.
+**BookingCrawler** is an educational web crawler project designed to demonstrate web scraping techniques on a demo book website. It simulates the extraction of book titles, authors, prices, and availability data to help developers practice handling pagination, dynamic content, and structured data collection.
 
 ---
 
