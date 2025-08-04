@@ -2,6 +2,7 @@ from bs4 import BeautifulSoup
 from requests import RequestException
 from dotenv import load_dotenv
 from pymongo import MongoClient
+from lxml import html
 import requests
 import logging
 import json
@@ -104,19 +105,38 @@ class BookCrawler:
                         "books": temp_list
                     })
                 # Contiune With Book Parser
+
+                await self.parseBooks()
         except Exception as exError:
             logging.error("[ERROR] Books data is not extracted!")
 
-    def parseBooks(self, books):
-        collectedBookData = []
-        temp_book = []
-        try:
-            for bookData in books:
-                categoriesName = bookData["category_name"]
-                print(categoriesName)                
+    async def parseBooks(self):
 
+        bookUrl = "https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html"
+        bookHtmlData = None
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(bookUrl) as response:
+                    bookHtmlData = await response.text()
+
+            contentTree = html.fromstring(bookHtmlData)
+            
+            bookName = contentTree.xpath('//article//h1/text()')
+            bookPrice = contentTree.xpath('//p[@class="price_color"]/text()')
+            bookAvailable = contentTree.xpath('//th[text()="Availability"]/following-sibling::td/text()')
+            bookPicture = contentTree.xpath('//div[@id="product_gallery"]//img/@src')
+            bookUPCID = contentTree.xpath('//th[text()="UPC"]/following-sibling::td/text()')
+            print(f"""
+                Book Name : {bookName[0].strip()}\n
+                Book Price : {bookPrice[0].strip()}\n
+                Book Available : {bookAvailable[0].strip()}\n
+                Book Picture : {bookPicture[0].split('/')[2]}\n
+                Book UPC : {bookUPCID[0].strip()}\n
+            """)
+          
         except Exception as exError:
             logging.error("[ERROR] Books data is not parsed !")
+            print(exError)
 
     async def fetchBookUrl(self, session, url):
         try:
