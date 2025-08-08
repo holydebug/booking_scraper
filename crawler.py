@@ -14,7 +14,9 @@ import aiohttp
 class BookCrawler:
     baseUrl = "https://books.toscrape.com/"
     categories_set = set()
-    books_dict = dict()
+
+    collected_books = []
+    parsed_books = []
 
 
     # Logging config
@@ -96,48 +98,57 @@ class BookCrawler:
 
                     temp_list = []
                     for book in bookList:
-                        link = book.find('h3').find('a').get('href').split('/')[3]
-                        bookUrl = f"{self.baseUrl}{link}"
-                        temp_list.append(bookUrl)
+                        link = book.find('h3').find('a').get('href').replace('../../../', f'{self.baseUrl}catalogue/')
+                        temp_list.append(link)
 
                     bookData.append({
                         "category_name": categoryName,
                         "books": temp_list
                     })
                 # Contiune With Book Parser
+                self.parseBooks(bookData)
 
-                await self.parseBooks()
         except Exception as exError:
             logging.error("[ERROR] Books data is not extracted!")
 
-    async def parseBooks(self):
-
-        bookUrl = "https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html"
-        bookHtmlData = None
+    def parseBooks(self,booksList):
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(bookUrl) as response:
-                    bookHtmlData = await response.text()
+            for bookCategory in booksList:
+                categoryName = bookCategory['category_name']
+                books = bookCategory['books']
 
-            contentTree = html.fromstring(bookHtmlData)
-            
-            bookName = contentTree.xpath('//article//h1/text()')
-            bookPrice = contentTree.xpath('//p[@class="price_color"]/text()')
-            bookAvailable = contentTree.xpath('//th[text()="Availability"]/following-sibling::td/text()')
-            bookPicture = contentTree.xpath('//div[@id="product_gallery"]//img/@src')
-            bookUPCID = contentTree.xpath('//th[text()="UPC"]/following-sibling::td/text()')
-            print(f"""
-                Book Name : {bookName[0].strip()}\n
-                Book Price : {bookPrice[0].strip()}\n
-                Book Available : {bookAvailable[0].strip()}\n
-                Book Picture : {bookPicture[0].split('/')[2]}\n
-                Book UPC : {bookUPCID[0].strip()}\n
-            """)
-          
-        except Exception as exError:
-            logging.error("[ERROR] Books data is not parsed !")
-            print(exError)
+                for bookUrl in books:
+                    response = requests.get(bookUrl, timeout=1)
+                    print(f"Fetching book: {bookUrl}")  # For Debug
+                    if response.status_code != 200:
+                        logging.error(f"[ERROR] Failed to fetch {bookUrl} - Status: {response.status_code}")
+                        continue
 
+                    bookHtml = html.fromstring(response.content)
+                    bookTitle = bookHtml.xpath('//article//h1/text()')
+                    bookDescription = bookHtml.xpath('//*[@id="content_inner"]/article/p/text()')
+                    bookPrice = bookHtml.xpath('//*[@id="content_inner"]/article/div[1]/div[2]/p[1]/text()')
+                    bookAvailable = bookHtml.xpath('//th[text()="Availability"]/following-sibling::td/text()')
+                    bookPicture = bookHtml.xpath('//div[@id="product_gallery"]//img/@src')
+                    bookUPCID = bookHtml.xpath('//th[text()="UPC"]/following-sibling::td/text()')
+
+
+                    self.collected_books.append({
+                        "title": bookTitle,
+                        "price": bookPrice,
+                        "description": bookDescription,
+                        "upc": bookUPCID if bookUPCID else "null",
+                        "availability": bookAvailable,
+                        "picture": f"{self.baseUrl}{bookPicture[0]}" if bookPicture else "null",
+                        "url": bookUrl,
+                        "category": categoryName,
+                    })
+            logging.info(f"[SUCCESS] Parsed {len(self.collected_books)} books.")
+            print(self.collected_books)  # For Debug
+        except Exception as e:
+            logging.error(f"[ERROR] Parsing books failed: {str(e)}")
+
+    
     async def fetchBookUrl(self, session, url):
         try:
             async with session.get(url) as response:
